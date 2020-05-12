@@ -46,6 +46,11 @@ class KalmanFilter {
    */
   void UpdateEKF(const Eigen::VectorXd &z);
 
+  /**
+   * Standard update equations for both Update and UpdateEKF
+   */
+  void UpdateEqns(const Eigen::VectorXd &y);
+
   // state vector
   Eigen::VectorXd x_;
 

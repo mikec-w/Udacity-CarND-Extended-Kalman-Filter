@@ -5,6 +5,8 @@ using Eigen::VectorXd;
 using Eigen::MatrixXd;
 using std::vector;
 
+using namespace std;
+
 Tools::Tools() {}
 
 Tools::~Tools() {}

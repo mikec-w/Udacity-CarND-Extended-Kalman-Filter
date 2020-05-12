@@ -42,7 +42,7 @@ FusionEKF::FusionEKF() {
                0, 1, 0, 0;
 
    // F - next state function
-   F = MatrixXd(4,4);
+   MatrixXd F = MatrixXd(4,4);
 
    F << 1, 0, 1, 0,
         0, 1, 0, 1,
@@ -50,7 +50,7 @@ FusionEKF::FusionEKF() {
         0, 0, 0, 1;
 
    // X - initial state and location (4D - 2 position, 2 velocity)
-   X = MatrixXd(1,4);
+   VectorXd X = VectorXd(4);
 
    X << 0, 0, 0, 0;
 
@@ -58,7 +58,7 @@ FusionEKF::FusionEKF() {
    //Hj_ = CalculateJacobian(X);
 
    // P - initial uncertainty
-   P = MatrixXd(4,4);
+   MatrixXd P = MatrixXd(4,4);
 
    P << 1, 0, 0, 0,
         0, 1, 0, 0,
@@ -66,11 +66,14 @@ FusionEKF::FusionEKF() {
         0, 0, 0, 1000;
 
    // u - external motion (assume zero)
-   u = MatrixXd(1,2);
+   MatrixXd u = MatrixXd(1,2);
    u << 0, 0;
 
+   // Empty matrices to initialise EKF objects
+   MatrixXd Q = MatrixXd::Zero(4, 4);
+
    // Initialise EFK object
-   ekf_.Init(x, P, F, H_laser_, R_laser_, Q);
+   ekf_.Init(X, P, F, H_laser_, R_laser_, Q);
 }
 
 /**
@@ -101,7 +104,7 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
       float vx = measurement_pack.raw_measurements_[2] * cos(measurement_pack.raw_measurements_[1]);
       float vy = measurement_pack.raw_measurements_[2] * sin(measurement_pack.raw_measurements_[1]);
 
-      ekf_.x_ << x, y, vx, vy
+      ekf_.x_ << x, y, vx, vy;
     }
     else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER) {
       // TODO: Initialize state.
@@ -129,7 +132,7 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
    */
    // Get time step
    float dt = (measurement_pack.timestamp_ - previous_timestamp_) / 1000000.0;
-   previous_timestamp_ = measurement_pack.timestamp;
+   previous_timestamp_ = measurement_pack.timestamp_;
 
    //Update F
    ekf_.F_(0,2) = dt;
@@ -144,10 +147,10 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
    double n_ax = 9;
    double n_ay = 9;
 
-   ekf_.Q_ << (n_ax^2)*(dt^4)/4, 0, (n_ax^2)*((dt^3)/2),  0,
-              0, (n_ay^2)*((dt^4)/4), 0, (n_ay^2)*((dt^3)/2),
-              (n_ax^2)*((dt^3)/2), 0, (dt^2)*(n_ax^2), 0,
-              0, ((dt^3)/2)*(n_ay^2), 0, (dt^2)*(n_ay^2);
+   ekf_.Q_ << (n_ax*n_ax)*(dt*dt*dt*dt)/4, 0, (n_ax*n_ax)*((dt*dt*dt)/2),  0,
+              0, (n_ay*n_ay)*((dt*dt*dt*dt)/4), 0, (n_ay*n_ay)*((dt*dt*dt)/2),
+              (n_ax*n_ax)*((dt*dt*dt)/2), 0, (dt*dt)*(n_ax*n_ax), 0,
+              0, ((dt*dt*dt)/2)*(n_ay*n_ay), 0, (dt*dt)*(n_ay*n_ay);
 
 
   ekf_.Predict();
@@ -165,7 +168,7 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
     // Radar updates
 
     //calculate Jacobian
-    Hj_ = CalculateJacobian(ekf_.x_);
+    Hj_ = tools.CalculateJacobian(ekf_.x_);
     ekf_.R_ = R_radar_;
     // Extended KF update
     ekf_.UpdateEKF(measurement_pack.raw_measurements_);
