@@ -105,6 +105,12 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
       float vy = measurement_pack.raw_measurements_[2] * sin(measurement_pack.raw_measurements_[1]);
 
       ekf_.x_ << x, y, vx, vy;
+
+      // Speed is probably quite accurate
+      ekf_.P_ << 1, 0, 0, 0,
+                 0, 1, 0, 0,
+                 0, 0, 1, 0,
+                 0, 0, 0, 1;
     }
     else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER) {
       // TODO: Initialize state.
@@ -112,6 +118,12 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
                  measurement_pack.raw_measurements_[1],
                  0,
                  0;
+
+       // Speed is probably less accurate
+       ekf_.P_ << 1, 0, 0, 0,
+                  0, 1, 0, 0,
+                  0, 0, 1000, 0,
+                  0, 0, 0, 1000;
     }
 
     previous_timestamp_ = measurement_pack.timestamp_;
@@ -168,7 +180,7 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
     // Radar updates
 
     //calculate Jacobian
-    Hj_ = tools.CalculateJacobian(ekf_.x_);
+    ekf_.H_ = tools.CalculateJacobian(ekf_.x_);
     ekf_.R_ = R_radar_;
     // Extended KF update
     ekf_.UpdateEKF(measurement_pack.raw_measurements_);
