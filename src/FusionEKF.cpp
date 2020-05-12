@@ -37,7 +37,40 @@ FusionEKF::FusionEKF() {
    * TODO: Set the process and measurement noises
    */
 
+   // Laser measurement - only X and Y, no velocity
+   H_laser_ << 1, 0, 0, 0,
+               0, 1, 0, 0;
 
+   // F - next state function
+   F = MatrixXd(4,4);
+
+   F << 1, 0, 1, 0,
+        0, 1, 0, 1,
+        0, 0, 1, 0,
+        0, 0, 0, 1;
+
+   // X - initial state and location (4D - 2 position, 2 velocity)
+   X = MatrixXd(1,4);
+
+   X << 0, 0, 0, 0;
+
+   // H_Jacobian
+   //Hj_ = CalculateJacobian(X);
+
+   // P - initial uncertainty
+   P = MatrixXd(4,4);
+
+   P << 1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1000, 0,
+        0, 0, 0, 1000;
+
+   // u - external motion (assume zero)
+   u = MatrixXd(1,2);
+   u << 0, 0;
+
+   // Initialise EFK object
+   ekf_.Init(x, P, F, H_laser_, R_laser_, Q);
 }
 
 /**
@@ -59,18 +92,26 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
     // first measurement
     cout << "EKF: " << endl;
     ekf_.x_ = VectorXd(4);
-    ekf_.x_ << 1, 1, 1, 1;
 
     if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
-      // TODO: Convert radar from polar to cartesian coordinates 
-      //         and initialize state.
+      // TODO: Convert radar from polar to cartesian coordinates
+      //         and initialise state.
+      float x = measurement_pack.raw_measurements_[0] * cos(measurement_pack.raw_measurements_[1]);
+      float y = measurement_pack.raw_measurements_[0] * sin(measurement_pack.raw_measurements_[1]);
+      float vx = measurement_pack.raw_measurements_[2] * cos(measurement_pack.raw_measurements_[1]);
+      float vy = measurement_pack.raw_measurements_[2] * sin(measurement_pack.raw_measurements_[1]);
 
+      ekf_.x_ << x, y, vx, vy
     }
     else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER) {
       // TODO: Initialize state.
-
+      ekf_.x_ << measurement_pack.raw_measurements_[0],
+                 measurement_pack.raw_measurements_[1],
+                 0,
+                 0;
     }
 
+    previous_timestamp_ = measurement_pack.timestamp_;
     // done initializing, no need to predict or update
     is_initialized_ = true;
     return;
@@ -81,11 +122,33 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
    */
 
   /**
-   * TODO: Update the state transition matrix F according to the new elapsed time.
+   * Update the state transition matrix F according to the new elapsed time.
    * Time is measured in seconds.
-   * TODO: Update the process noise covariance matrix.
+   * Update the process noise covariance matrix.
    * Use noise_ax = 9 and noise_ay = 9 for your Q matrix.
    */
+   // Get time step
+   float dt = (measurement_pack.timestamp_ - previous_timestamp_) / 1000000.0;
+   previous_timestamp_ = measurement_pack.timestamp;
+
+   //Update F
+   ekf_.F_(0,2) = dt;
+   ekf_.F_(1,3) = dt;
+   //ekf_.F_ << 1, 0, dt, 0,
+  //            0, 1, 0,  dt,
+  //            0, 0, 1,  0,
+  //            0, 0, 0,  1;
+
+
+   // Q
+   double n_ax = 9;
+   double n_ay = 9;
+
+   ekf_.Q_ << (n_ax^2)*(dt^4)/4, 0, (n_ax^2)*((dt^3)/2),  0,
+              0, (n_ay^2)*((dt^4)/4), 0, (n_ay^2)*((dt^3)/2),
+              (n_ax^2)*((dt^3)/2), 0, (dt^2)*(n_ax^2), 0,
+              0, ((dt^3)/2)*(n_ay^2), 0, (dt^2)*(n_ay^2);
+
 
   ekf_.Predict();
 
@@ -94,18 +157,27 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
    */
 
   /**
-   * TODO:
    * - Use the sensor type to perform the update step.
    * - Update the state and covariance matrices.
    */
 
   if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
-    // TODO: Radar updates
+    // Radar updates
+
+    //calculate Jacobian
+    Hj_ = CalculateJacobian(ekf_.x_);
+    ekf_.R_ = R_radar_;
+    // Extended KF update
+    ekf_.UpdateEKF(measurement_pack.raw_measurements_);
 
   } else {
-    // TODO: Laser updates
-
+    // Laser updates
+    ekf_.H_ = H_laser_;
+    ekf_.R_ = R_laser_;
+    // Normal KF update
+    ekf_.Update(measurement_pack.raw_measurements_);
   }
+
 
   // print the output
   cout << "x_ = " << ekf_.x_ << endl;
